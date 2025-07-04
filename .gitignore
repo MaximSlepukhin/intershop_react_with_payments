@@ -1,0 +1,5 @@
+/.idea/
+/.mvn/
+.DS_STORE
+
+**/target/
