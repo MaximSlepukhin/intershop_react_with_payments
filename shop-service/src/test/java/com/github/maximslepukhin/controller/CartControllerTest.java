@@ -3,6 +3,8 @@ package com.github.maximslepukhin.controller;
 
 import com.github.maximslepukhin.enums.ActionType;
 import com.github.maximslepukhin.model.Item;
+import com.github.maximslepukhin.payment.PaymentApi;
+import com.github.maximslepukhin.payment.PaymentApiImpl;
 import com.github.maximslepukhin.repository.ItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,7 @@ public class CartControllerTest extends AbstractIntegrationTest {
     private ItemRepository itemRepository;
 
     @MockBean
-    private org.openapitools.client.api.DefaultApi paymentApi;
+    private PaymentApi paymentApi;
 
     private Item testItem;
 
