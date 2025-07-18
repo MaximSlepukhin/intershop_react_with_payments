@@ -1,0 +1,16 @@
+packageName: com.github.maximslepukhin.server.api
+artifactId: payment-server-generated
+artifactVersion: 1.0.0-SNAPSHOT
+library: spring-boot
+useTags: true
+interfaceOnly: true
+reactive: true
+delegatePattern: true
+skipDefaultInterface: false
+useBeanValidation: true
+hideGenerationTimestamp: true
+serializationLibrary: jackson
+dateLibrary: java8
+useJakartaEe: true
+generateApiTests: false
+generateModelTests: false

@@ -1,0 +1,11 @@
+packageName: com.github.maximslepukhin.client.api
+artifactId: payment-client-generated
+artifactVersion: 1.0.0-SNAPSHOT
+library: webclient
+useBeanValidation: true
+hideGenerationTimestamp: true
+serializationLibrary: jackson
+dateLibrary: java8
+generateTests: false
+generateApiTests: false
+generateModelTests: false
