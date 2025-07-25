@@ -23,6 +23,7 @@ public class ItemControllerTest extends AbstractIntegrationTest {
     private ItemRepository itemRepository;
 
     private Item lenovoItem;
+
     private Item samsungItem;
 
     @BeforeEach
@@ -30,7 +31,7 @@ public class ItemControllerTest extends AbstractIntegrationTest {
         itemRepository.deleteAll()
                 .thenMany(itemRepository.saveAll(List.of(
                         new Item(null, "Ноутбук Lenovo", "15.6\", 16 ГБ RAM, SSD 512 ГБ", 80000, "images/lenovo.jpeg"),
-                        new Item(null, "Смартфон Samsung", "6.5\" AMOLED, 128 ГБ памяти'", 90000, "images/samsung.jpeg")
+                        new Item(null, "Смартфон Samsung", "6.5\" AMOLED, 128 ГБ памяти", 90000, "images/samsung.jpeg")
                 )))
                 .collectList()
                 .doOnNext(items -> {
@@ -50,7 +51,7 @@ public class ItemControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void testGetItemsPage() {
+    void testGetItemsPageWithoutSearch() {
         webTestClient.get()
                 .uri("/main/items?pageSize=5&pageNumber=1")
                 .exchange()
@@ -65,7 +66,7 @@ public class ItemControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void testSearchItems() {
+    void testSearchItemsWithResult() {
         webTestClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/main/items")

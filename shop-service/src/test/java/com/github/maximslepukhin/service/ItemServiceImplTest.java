@@ -1,112 +1,102 @@
 package com.github.maximslepukhin.service;
 
 
-import com.github.maximslepukhin.enums.ActionType;
-import com.github.maximslepukhin.service.CartServiceImpl;
+import com.github.maximslepukhin.dto.ItemWithCount;
+import com.github.maximslepukhin.model.Item;
+import com.github.maximslepukhin.repository.ItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.redis.core.ReactiveListOperations;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 
 public class ItemServiceImplTest {
-    private CartServiceImpl cartService;
+
+    private ItemRepository itemRepository;
+    private ReactiveRedisTemplate redisTemplate;
+    private ReactiveListOperations listOperations;
+    private ReactiveValueOperations valueOperations;
+    private ItemServiceImpl itemService;
 
     @BeforeEach
-    void setup() {
-        cartService = new CartServiceImpl();
+    void setUp() {
+        itemRepository = mock(ItemRepository.class);
+        redisTemplate = mock(ReactiveRedisTemplate.class);
+        listOperations = mock(ReactiveListOperations.class);
+        valueOperations = mock(ReactiveValueOperations.class);
+
+        when(redisTemplate.opsForList()).thenReturn(listOperations);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        itemService = new ItemServiceImpl(itemRepository, redisTemplate);
     }
 
     @Test
-    void testAddItemToEmptyCart() {
-        Mono<Map<Long, Integer>> emptyCart = Mono.empty();
+    void testSplitToRowsEven() {
+        List<ItemWithCount> list = Arrays.asList(
+                new ItemWithCount(new Item(1L, "Item1", "", 10.0, ""), 1),
+                new ItemWithCount(new Item(2L, "Item2", "", 20.0, ""), 1),
+                new ItemWithCount(new Item(3L, "Item3", "", 30.0, ""), 1),
+                new ItemWithCount(new Item(4L, "Item4", "", 40.0, ""), 1)
+        );
 
-        Map<Long, Integer> result = cartService.changeCart(emptyCart, ActionType.plus, 1L).block();
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(1, result.get(1L));
+        ItemWithCount[][] result = itemService.splitToRows(list, 2);
+        assertEquals(2, result.length);
+        assertEquals(2, result[0].length);
+        assertEquals("Item1", result[0][0].getTitle());
     }
 
     @Test
-    void testAddNewItemToExistingCart() {
-        Map<Long, Integer> existingCart = new HashMap<>();
-        existingCart.put(2L, 3);
-        Mono<Map<Long, Integer>> cartMono = Mono.just(existingCart);
+    void testSplitToRowsUneven() {
+        List<ItemWithCount> list = Arrays.asList(
+                new ItemWithCount(new Item(1L, "Item1", "", 10.0, ""), 1),
+                new ItemWithCount(new Item(2L, "Item2", "", 20.0, ""), 1),
+                new ItemWithCount(new Item(3L, "Item3", "", 30.0, ""), 1)
+        );
 
-        Map<Long, Integer> result = cartService.changeCart(cartMono, ActionType.plus, 1L).block();
+        ItemWithCount[][] result = itemService.splitToRows(list, 2);
+        assertEquals(2, result.length);
+        assertEquals(1, result[1].length);
+        assertEquals("Item3", result[1][0].getTitle());
+    }
 
+    @Test
+    void testToItemsWithCount() {
+        Map<Long, Integer> cart = Map.of(1L, 2, 2L, 3);
+        Item item1 = new Item(1L, "Item1", "", 10.0, "");
+        Item item2 = new Item(2L, "Item2", "", 20.0, "");
+
+        Flux<Item> itemFlux = Flux.just(item1, item2);
+
+        List<ItemWithCount> result = itemService.toItemsWithCount(itemFlux, cart).collectList().block();
         assertNotNull(result);
         assertEquals(2, result.size());
-        assertEquals(3, result.get(2L));
-        assertEquals(1, result.get(1L));
+        assertEquals(2, result.get(0).getCount());
+        assertEquals(3, result.get(1).getCount());
     }
 
     @Test
-    void testIncreaseCountOfExistingItem() {
-        Map<Long, Integer> existingCart = new HashMap<>();
-        existingCart.put(1L, 2);
-        Mono<Map<Long, Integer>> cartMono = Mono.just(existingCart);
+    void testGetItemById_CacheMissThenSave() {
+        Item item = new Item(1L, "DbItem", "", 150.0, "");
+        when(valueOperations.get(anyString())).thenReturn(Mono.empty());
+        when(itemRepository.findById(1L)).thenReturn(Mono.just(item));
+        when(valueOperations.set(anyString(), eq(item), any())).thenReturn(Mono.just(true));
 
-        Map<Long, Integer> result = cartService.changeCart(cartMono, ActionType.plus, 1L).block();
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(3, result.get(1L));
-    }
-
-    @Test
-    void testDecreaseCountWhenCountMoreThanOne() {
-        Map<Long, Integer> existingCart = new HashMap<>();
-        existingCart.put(1L, 3);
-        Mono<Map<Long, Integer>> cartMono = Mono.just(existingCart);
-
-        Map<Long, Integer> result = cartService.changeCart(cartMono, ActionType.minus, 1L).block();
+        Item result = itemService.getItemById(1L).block();
 
         assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(2, result.get(1L));
-    }
-
-    @Test
-    void testRemoveItemWhenCountIsOne() {
-        Map<Long, Integer> existingCart = new HashMap<>();
-        existingCart.put(1L, 1);
-        Mono<Map<Long, Integer>> cartMono = Mono.just(existingCart);
-
-        Map<Long, Integer> result = cartService.changeCart(cartMono, ActionType.minus, 1L).block();
-
-        assertNotNull(result);
-        assertFalse(result.containsKey(1L));
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void testDeleteItem() {
-        Map<Long, Integer> existingCart = new HashMap<>();
-        existingCart.put(1L, 5);
-        existingCart.put(2L, 2);
-        Mono<Map<Long, Integer>> cartMono = Mono.just(existingCart);
-
-        Map<Long, Integer> result = cartService.changeCart(cartMono, ActionType.delete, 1L).block();
-
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertFalse(result.containsKey(1L));
-        assertTrue(result.containsKey(2L));
-    }
-
-    @Test
-    void testDeleteItemFromEmptyCart() {
-        Mono<Map<Long, Integer>> emptyCart = Mono.empty();
-
-        Map<Long, Integer> result = cartService.changeCart(emptyCart, ActionType.delete, 1L).block();
-
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
+        assertEquals("DbItem", result.getTitle());
     }
 }

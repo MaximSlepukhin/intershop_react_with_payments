@@ -2,6 +2,7 @@ package com.github.maximslepukhin.dto;
 
 
 public class ItemsResult {
+
     private Paging pageInfo;
 
     public ItemsResult(boolean hasNextPage, int page, int pageSize) {

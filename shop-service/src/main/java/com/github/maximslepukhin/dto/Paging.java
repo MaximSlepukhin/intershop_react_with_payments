@@ -8,6 +8,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Paging {
+
     private int pageNumber;
     private int pageSize;
     private boolean hasNext;

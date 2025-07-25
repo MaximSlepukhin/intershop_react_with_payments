@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-
 <head>
-    <meta charSet="UTF-8"/>
-    <title>Заказы</title>
+    <meta charset="UTF-8"/>
+    <title>Мои заказы</title>
 </head>
-
 <body>
 <a href="/cart/items" style="float:right;">
     <b>КОРЗИНА &cudarrr;</b>
@@ -13,23 +11,24 @@
 <a href="/main/items" style="float:right;">
     <b>ГЛАВНАЯ &cudarrr;</b>
 </a>
-<table style="width:70%;margin-left:auto;margin-right:auto;">
-    <tr th:each="order : ${orders}">
+
+<table style="width:70%; margin-left:auto; margin-right:auto;">
+    <tr th:each="order, orderStat : ${orders}">
         <td>
             <h2>
-                <a th:text="${'Заказ №'+order.id()}" th:href="${'/orders/'+order.id()}"></a>
+                <a th:text="${'Заказ №' + (orderStat.index + 1)}"
+                   th:href="${'/orders/' + order.id()}"></a>
             </h2>
             <table>
                 <tr th:each="item : ${order.items()}">
-                    <td th:text="${item.getTitle()+' ('+item.getCount()+' шт.) '+(item.getPrice()*item.getCount())+' руб.'}"></td>
+                    <td th:text="${item.getTitle() + ' (' + item.getCount() + ' шт.) ' + (item.getPrice() * item.getCount()) + ' руб.'}"></td>
                 </tr>
             </table>
             <p>
-                <b th:text="${'Сумма: '+order.totalSum()}+' руб.'"></b>
+                <b th:text="${'Сумма: ' + order.totalSum() + ' руб.'}"></b>
             </p>
         </td>
     </tr>
 </table>
 </body>
-
 </html>

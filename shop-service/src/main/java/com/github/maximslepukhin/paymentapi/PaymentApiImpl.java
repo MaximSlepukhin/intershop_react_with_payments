@@ -1,4 +1,4 @@
-package com.github.maximslepukhin.payment;
+package com.github.maximslepukhin.paymentapi;
 
 import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +15,13 @@ public class PaymentApiImpl implements PaymentApi {
 
 
     @Override
-    public Mono<Double> balanceGet() throws WebClientResponseException {
-        return paymentApi.balanceGet();
+    public Mono<Double> balanceGet(@Nonnull Long userId) throws WebClientResponseException {
+        return paymentApi.balanceUserIdGet(userId);
     }
 
     @Override
-    public Mono<PaymentResponse> paymentPost(@Nonnull PaymentRequest paymentRequest) throws WebClientResponseException {
-        return paymentApi.paymentPost(paymentRequest);
+    public Mono<PaymentResponse> paymentPost(@Nonnull Long userId,
+                                             @Nonnull PaymentRequest paymentRequest) throws WebClientResponseException {
+        return paymentApi.paymentUserIdPost(userId, paymentRequest);
     }
 }

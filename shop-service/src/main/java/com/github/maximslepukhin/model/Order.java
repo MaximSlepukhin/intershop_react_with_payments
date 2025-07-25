@@ -16,11 +16,13 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Order {
+
     @Id
     private Long id;
     @Column("total_sum")
     private double totalSum;
-
+    @Column("user_id")
+    private Long userId;
     @Transient
     private List<OrderItem> orderItems;
 

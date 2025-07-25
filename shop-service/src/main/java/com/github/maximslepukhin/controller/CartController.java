@@ -4,19 +4,20 @@ package com.github.maximslepukhin.controller;
 import com.github.maximslepukhin.dto.ActionForm;
 import com.github.maximslepukhin.enums.ActionType;
 import com.github.maximslepukhin.enums.SortType;
-import com.github.maximslepukhin.payment.PaymentApi;
+import com.github.maximslepukhin.model.SecurityUser;
+import com.github.maximslepukhin.paymentapi.PaymentApi;
 import com.github.maximslepukhin.service.CartService;
 import com.github.maximslepukhin.service.ItemService;
 import com.github.maximslepukhin.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.web.server.ServerWebExchange;
-import org.springframework.web.server.WebSession;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
@@ -24,12 +25,11 @@ import java.util.*;
 @Controller
 @Slf4j
 public class CartController {
+
     private final ItemService itemService;
     private final OrderService orderService;
     private final CartService cartService;
     private final PaymentApi paymentApi;
-
-    private static final String CART_SESSION_KEY = "cart";
 
     public CartController(ItemService itemService, OrderService orderService, CartService cartService, PaymentApi paymentApi) {
         this.itemService = itemService;
@@ -38,6 +38,7 @@ public class CartController {
         this.paymentApi = paymentApi;
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/main/items/{id}")
     public Mono<String> updateItemFromMain(@PathVariable Long id,
                                            @ModelAttribute ActionForm actionForm,
@@ -45,101 +46,137 @@ public class CartController {
                                            @RequestParam(defaultValue = "NO") SortType sort,
                                            @RequestParam(defaultValue = "10") int pageSize,
                                            @RequestParam(defaultValue = "1") int pageNumber,
-                                           WebSession session) {
-        return updateCart(session, actionForm.getAction(), id)
+                                           @AuthenticationPrincipal SecurityUser securityUser) {
+
+        if (securityUser == null) {
+            return Mono.just("redirect:/login");
+        }
+        Long userId = securityUser.getId();
+        ActionType action = actionForm.getAction();
+        return updateCart(userId, action, id)
                 .thenReturn("redirect:/main/items?search=%s&sort=%s&pageSize=%s&pageNumber=%s"
                         .formatted(search, sort, pageSize, pageNumber));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/cart/items/{id}")
     public Mono<String> updateItemFromCart(@PathVariable Long id,
                                            @ModelAttribute ActionForm actionForm,
-                                           WebSession session) {
-        return updateCart(session, actionForm.getAction(), id)
+                                           @AuthenticationPrincipal SecurityUser securityUser) {
+        if (securityUser == null) {
+            return Mono.just("redirect:/login");
+        }
+        Long userId = securityUser.getId();
+        ActionType action = actionForm.getAction();
+        return updateCart(userId, action, id)
                 .thenReturn("redirect:/cart/items");
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/items/{id}")
     public Mono<String> updateItemFromItemPage(@PathVariable Long id,
                                                @ModelAttribute ActionForm actionForm,
-                                               WebSession session) {
-        return updateCart(session, actionForm.getAction(), id)
+                                               @AuthenticationPrincipal SecurityUser securityUser) {
+        if (securityUser == null) {
+            return Mono.just("redirect:/login");
+        }
+        Long userId = securityUser.getId();
+        ActionType action = actionForm.getAction();
+        return updateCart(userId, action, id)
                 .thenReturn("redirect:/items/" + id);
     }
 
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/cart/items")
-    public Mono<String> showCart(Model model, ServerWebExchange exchange) {
-        return exchange.getSession()
-                .flatMap(webSession -> {
-                    Map<Long, Integer> cart = webSession.getAttribute("cart");
-                    if (cart == null) {
-                        cart = new HashMap<>();
-                        webSession.getAttributes().put("cart", cart);
-                    }
-                    Map<Long, Integer> finalCart = cart;
+    public Mono<String> showCart(@AuthenticationPrincipal SecurityUser securityUser, Model model) {
+        Mono<Map<Long, Integer>> cartMono;
 
-                    return itemService.getItemWithCount(finalCart)
+        if (securityUser != null) {
+            Long userId = securityUser.getId();
+            cartMono = cartService.getUserCartMap(userId).defaultIfEmpty(new HashMap<>());
+        } else {
+            cartMono = Mono.just(new HashMap<>());
+        }
+
+        return cartMono.flatMap(cart ->
+                itemService.getItemWithCount(cart)
+                        .collectList()
+                        .flatMap(itemsWithCount -> {
+                            double total = itemsWithCount.stream()
+                                    .mapToDouble(i -> i.getPrice() * i.getCount())
+                                    .sum();
+
+                            return paymentApi.balanceGet(securityUser.getId()).map(balance -> {
+                                boolean showBuyButton = balance > total && !itemsWithCount.isEmpty();
+
+                                model.addAttribute("total", total);
+                                model.addAttribute("items", itemsWithCount);
+                                model.addAttribute("showBuyButton", showBuyButton);
+                                return "cart";
+                            });
+                        })
+        );
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @PostMapping("/buy")
+    public Mono<String> buyItemsFromCart(@AuthenticationPrincipal SecurityUser securityUser) {
+        Long userId = securityUser.getId();
+        return cartService.getUserCartMap(userId)
+                .flatMap(cart -> {
+                    if (cart.isEmpty()) {
+                        return Mono.just("redirect:/buy/error");
+                    }
+
+                    return itemService.getItemWithCount(cart)
                             .collectList()
                             .flatMap(itemsWithCount -> {
-                                double total = itemsWithCount.stream()
+                                double totalAmount = itemsWithCount.stream()
                                         .mapToDouble(i -> i.getPrice() * i.getCount())
                                         .sum();
 
-                                return paymentApi.balanceGet()
+                                return paymentApi.balanceGet(userId)
                                         .flatMap(balance -> {
-                                            boolean showBuyButton = balance > total && !itemsWithCount.isEmpty();
+                                            if (balance == null || balance < totalAmount) {
+                                                return Mono.just("redirect:/buy/error");
+                                            }
 
-                                            model.addAttribute("total", total);
-                                            model.addAttribute("items", itemsWithCount);
-                                            model.addAttribute("showBuyButton", showBuyButton);
-                                            return Mono.just("cart");
-                                        });
-                            });
-                });
-    }
+                                            var paymentRequest = new org.openapitools.client.model.PaymentRequest();
+                                            paymentRequest.setAmount(totalAmount);
 
-    @PostMapping("/buy")
-    public Mono<String> buyItemsFromCart(ServerWebExchange exchange) {
-        return exchange.getSession()
-                .flatMap(session -> {
-                    Map<Long, Integer> cart = session.getAttribute(CART_SESSION_KEY);
-                    if (cart == null || cart.isEmpty()) {
-                        return Mono.just("redirect:/main/items");
-                    }
-                    return itemService.getItemWithCount(cart)
-                            .collectList()
-                            .flatMap(items -> {
-                                double totalAmount = items.stream()
-                                        .mapToDouble(item -> item.getPrice() * item.getCount())
-                                        .sum();
-
-                                org.openapitools.client.model.PaymentRequest request = new org.openapitools.client.model.PaymentRequest();
-                                request.setAmount(totalAmount);
-
-                                return paymentApi.paymentPost(request)
-                                        .flatMap(responseEntity -> {
-
-
-                                            return orderService.createOrderFromCart(cart)
-                                                    .map(orderId -> {
-                                                        session.getAttributes().remove(CART_SESSION_KEY);
-                                                        return "redirect:/orders/" + orderId + "?newOrder=true";
+                                            return paymentApi.paymentPost(userId, paymentRequest)
+                                                    .flatMap(paymentResponse -> {
+                                                        if (paymentResponse != null && Boolean.TRUE.equals(paymentResponse.getSuccess())) {
+                                                            return orderService.createOrderFromCart(userId)
+                                                                    .map(orderId -> "redirect:/orders/" + orderId + "?newOrder=true");
+                                                        } else {
+                                                            return Mono.just("redirect:/buy/error");
+                                                        }
                                                     });
                                         });
                             });
+                })
+                .onErrorResume(e -> {
+                    e.printStackTrace();
+                    return Mono.just("redirect:/buy/error");
                 });
     }
 
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/buy/error")
+    public String showBuyErrorPage() {
+        return "buy-error"; // шаблон buy-error.html
+    }
 
-    private Mono<Void> updateCart(WebSession session, ActionType action, Long id) {
+    private Mono<Void> updateCart(Long userId, ActionType action, Long itemId) {
         if (action == null) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "ActionType must not be null"));
         }
-        Map<Long, Integer> cart = session.getAttribute(CART_SESSION_KEY);
-        Mono<Map<Long, Integer>> cartMono = Mono.justOrEmpty(cart);
-
-        return cartService.changeCart(cartMono, action, id)
-                .doOnNext(updatedCart -> session.getAttributes().put(CART_SESSION_KEY, updatedCart))
+        return cartService.changeCart(userId, action, itemId)
+                .onErrorResume(e -> {
+                    System.err.println("Ошибка при обновлении корзины: " + e.getMessage());
+                    return Mono.empty();
+                })
                 .then();
     }
 }

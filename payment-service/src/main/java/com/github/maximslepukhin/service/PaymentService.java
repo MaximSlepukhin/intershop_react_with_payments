@@ -1,5 +1,6 @@
 package com.github.maximslepukhin.service;
 
+import com.github.maximslepukhin.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.openapitools.api.DefaultApi;
 import org.openapitools.model.PaymentRequest;
@@ -14,33 +15,44 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class PaymentService implements DefaultApi {
 
-    private static Double balance = 500000.0;
+    private final UserRepository userRepository;
 
     @Override
-    public Mono<ResponseEntity<Double>> _balanceGet(ServerWebExchange exchange) {
-        synchronized (this) {
-            return Mono.just(ResponseEntity.ok(balance));
-        }
+    public Mono<ResponseEntity<Double>> balanceUserIdGet(Long userId, ServerWebExchange exchange) {
+        return userRepository.findById(userId)
+                .map(user -> ResponseEntity.ok(user.getBalance()))
+                .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
     }
 
     @Override
-    public Mono<ResponseEntity<PaymentResponse>> paymentPost(Mono<PaymentRequest> paymentRequestMono, ServerWebExchange exchange) {
-        return paymentRequestMono.map(request -> {
-            double amountToPay = request.getAmount();
-            PaymentResponse response = new PaymentResponse();
+    public Mono<ResponseEntity<PaymentResponse>> paymentUserIdPost(Long userId, Mono<PaymentRequest> paymentRequest, ServerWebExchange exchange) {
+        return paymentRequest.flatMap(request ->
+                userRepository.findById(userId)
+                        .flatMap(user -> {
+                            double currentBalance = user.getBalance();
+                            double amountToPay = request.getAmount();
+                            PaymentResponse response = new PaymentResponse();
 
-            synchronized (PaymentService.class) {
-                if (balance >= amountToPay) {
-                    balance -= amountToPay;
-                    response.setSuccess(true);
-                    response.setMessage("Платёж прошёл успешно. Остаток: " + balance);
-                } else {
-                    response.setSuccess(false);
-                    response.setMessage("Недостаточно средств. Баланс: " + balance);
-                }
-            }
-
-            return ResponseEntity.ok(response);
-        });
+                            if (currentBalance >= amountToPay) {
+                                user.setBalance(currentBalance - amountToPay);
+                                return userRepository.save(user)
+                                        .map(updatedUser -> {
+                                            response.setSuccess(true);
+                                            response.setMessage("Платёж прошёл успешно. Остаток: " + updatedUser.getBalance());
+                                            return ResponseEntity.ok(response);
+                                        });
+                            } else {
+                                response.setSuccess(false);
+                                response.setMessage("Недостаточно средств. Баланс: " + currentBalance);
+                                return Mono.just(ResponseEntity.ok(response));
+                            }
+                        })
+                        .switchIfEmpty(Mono.fromCallable(() -> {
+                            PaymentResponse response = new PaymentResponse();
+                            response.setSuccess(false);
+                            response.setMessage("Пользователь не найден");
+                            return ResponseEntity.ok(response);
+                        }))
+        );
     }
 }

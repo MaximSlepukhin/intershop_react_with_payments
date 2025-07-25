@@ -1,4 +1,4 @@
-package com.github.maximslepukhin;
+package com.github.maximslepukhin.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +11,7 @@ import org.thymeleaf.spring6.view.reactive.ThymeleafReactiveViewResolver;
 
 @Configuration
 public class ThymeleafConfig {
+
     @Bean
     @Primary
     public SpringResourceTemplateResolver templateResolver(ResourceLoader resourceLoader) {

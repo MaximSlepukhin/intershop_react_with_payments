@@ -23,52 +23,68 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final ItemRepository itemRepository;
     private final OrderItemRepository orderItemRepository;
+    private final CartService cartService;
 
-    public OrderServiceImpl(OrderRepository orderRepository, ItemRepository itemRepository, OrderItemRepository orderItemRepository) {
+    public OrderServiceImpl(OrderRepository orderRepository, ItemRepository itemRepository,
+                            OrderItemRepository orderItemRepository, CartService cartService) {
         this.orderRepository = orderRepository;
         this.itemRepository = itemRepository;
         this.orderItemRepository = orderItemRepository;
+        this.cartService = cartService;
     }
 
     @Override
-    public Mono<Long> createOrderFromCart(Map<Long, Integer> cart) {
-        Flux<Item> listOfItems = itemRepository.findAllById(cart.keySet());
-        return listOfItems.
-                collectList()
-                .flatMap(items -> {
-                    double totalSum = items.stream()
-                            .mapToDouble(item -> item.getPrice() * cart.get(item.getId()))
-                            .sum();
-                    Order order = new Order();
-                    order.setTotalSum(totalSum);
+    public Mono<Long> createOrderFromCart(Long userId) {
+        return cartService.getUserCartMap(userId)
+                .flatMap(cart -> {
+                    if (cart.isEmpty()) {
+                        return Mono.error(new IllegalStateException("Cart is empty"));
+                    }
 
-                    return orderRepository.save(order)
-                            .flatMap(o -> {
-                                List<OrderItem> orderItems = items.stream()
-                                        .map(i -> {
-                                            OrderItem orderItem = new OrderItem();
-                                            orderItem.setItemId(i.getId());
-                                            orderItem.setOrderId(o.getId());
-                                            orderItem.setCount(cart.get(i.getId()));
-                                            return orderItem;
-                                        })
-                                        .toList();
-                                return Flux.fromIterable(orderItems)
-                                        .flatMap(orderItemRepository::save)
-                                        .then(Mono.just(o.getId()));
+                    Flux<Item> listOfItems = itemRepository.findAllById(cart.keySet());
+                    return listOfItems
+                            .collectList()
+                            .flatMap(items -> {
+                                double totalSum = items.stream()
+                                        .mapToDouble(item -> item.getPrice() * cart.get(item.getId()))
+                                        .sum();
+
+                                Order order = new Order();
+                                order.setTotalSum(totalSum);
+                                order.setUserId(userId); // Важно
+
+                                return orderRepository.save(order)
+                                        .flatMap(o -> {
+                                            List<OrderItem> orderItems = items.stream()
+                                                    .map(i -> {
+                                                        OrderItem orderItem = new OrderItem();
+                                                        orderItem.setItemId(i.getId());
+                                                        orderItem.setOrderId(o.getId());
+                                                        orderItem.setCount(cart.get(i.getId()));
+                                                        return orderItem;
+                                                    })
+                                                    .toList();
+
+                                            return Flux.fromIterable(orderItems)
+                                                    .flatMap(orderItemRepository::save)
+                                                    .then(
+                                                            cartService.clearCart(userId)
+                                                                    .thenReturn(o.getId())
+                                                    );
+                                        });
                             });
                 });
     }
 
     @Override
-    public Flux<OrderWithItems> getAllOrdersWithItems() {
-        return orderRepository.findAll()
+    public Mono<OrderWithItems> getOrderWithItemsById(Long id) {
+        return orderRepository.findById(id)
                 .flatMap(this::buildOrderWithItems);
     }
 
     @Override
-    public Mono<OrderWithItems> getOrderWithItemsById(Long id) {
-        return orderRepository.findById(id)
+    public Flux<OrderWithItems> getAllOrdersWithItemsForUser(Long userId) {
+        return orderRepository.findByUserId(userId)
                 .flatMap(this::buildOrderWithItems);
     }
 

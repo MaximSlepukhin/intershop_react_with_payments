@@ -1,4 +1,4 @@
-package com.github.maximslepukhin;
+package com.github.maximslepukhin.config;
 
 import com.github.maximslepukhin.model.Item;
 import org.springframework.context.annotation.Bean;
@@ -29,5 +29,4 @@ public class RedisConfig {
 
         return new ReactiveRedisTemplate<>(connectionFactory, context);
     }
-
 }

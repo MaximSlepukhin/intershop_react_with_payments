@@ -4,12 +4,12 @@ import com.github.maximslepukhin.dto.OrderWithItems;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
 
 public interface OrderService {
-    Mono<Long> createOrderFromCart(Map<Long, Integer> cart);
 
-    Flux<OrderWithItems> getAllOrdersWithItems();
+    Mono<Long> createOrderFromCart(Long userId);
 
     Mono<OrderWithItems> getOrderWithItemsById(Long id);
+
+    Flux<OrderWithItems> getAllOrdersWithItemsForUser(Long userId);
 }

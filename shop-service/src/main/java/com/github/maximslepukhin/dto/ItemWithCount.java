@@ -8,6 +8,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @Data
 public class ItemWithCount extends Item {
+
     private int count;
 
     public ItemWithCount(Item item, int count) {

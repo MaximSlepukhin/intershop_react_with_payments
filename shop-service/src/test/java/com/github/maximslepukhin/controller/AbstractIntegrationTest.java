@@ -31,11 +31,9 @@ public class AbstractIntegrationTest {
         @Override
         public void initialize(ConfigurableApplicationContext ctx) {
             postgres.start();
-
             String r2dbcUrl = "r2dbc:postgresql://"
                               + postgres.getHost() + ":" + postgres.getFirstMappedPort()
                               + "/" + postgres.getDatabaseName();
-
             TestPropertyValues.of(
                     "spring.r2dbc.url=" + r2dbcUrl,
                     "spring.r2dbc.username=" + postgres.getUsername(),
@@ -50,12 +48,10 @@ public class AbstractIntegrationTest {
     @Test
     void testReactiveConnectionWithBlock() {
         assertNotNull(databaseClient);
-
         Integer result = databaseClient.sql("SELECT 1")
                 .map((row, meta) -> row.get(0, Integer.class))
                 .one()
                 .block();
-
         assertNotNull(result);
         assertEquals(1, result);
     }

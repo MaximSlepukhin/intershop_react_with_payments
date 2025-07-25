@@ -9,4 +9,6 @@ import reactor.core.publisher.Flux;
 @Repository
 public interface OrderRepository extends ReactiveCrudRepository<Order, Long> {
     Flux<Order> findAll();
+
+    Flux<Order> findByUserId(Long userId);
 }

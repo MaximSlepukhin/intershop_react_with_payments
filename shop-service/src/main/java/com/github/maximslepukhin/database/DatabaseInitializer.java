@@ -1,4 +1,4 @@
-package com.github.maximslepukhin;
+package com.github.maximslepukhin.database;
 
 
 import com.github.maximslepukhin.model.Item;

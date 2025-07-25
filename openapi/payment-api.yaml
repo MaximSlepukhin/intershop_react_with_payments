@@ -4,40 +4,13 @@ info:
   version: 1.0.0
   description: API сервиса платежей
 
-paths:
-  /balance:
-    get:
-      summary: Получить текущий баланс
-      responses:
-        '200':
-          description: Баланс успешно получен
-          content:
-            application/json:
-              schema:
-                type: number
-                format: double
-                example: 1500.75
-
-  /payment:
-    post:
-      summary: Совершить платёж
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PaymentRequest'
-      responses:
-        '200':
-          description: Платёж успешно выполнен
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentResponse'
-        '400':
-          description: Ошибка при выполнении платежа
-
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     PaymentRequest:
       type: object
@@ -58,3 +31,61 @@ components:
         message:
           type: string
           example: "Платёж прошёл успешно"
+
+security:
+  - bearerAuth: []
+
+paths:
+  /balance/{userId}:
+    get:
+      summary: Получить текущий баланс пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Баланс успешно получен
+          content:
+            application/json:
+              schema:
+                type: number
+                format: double
+                example: 1500.75
+        '404':
+          description: Пользователь не найден
+
+  /payment/{userId}:
+    post:
+      summary: Совершить платёж от имени пользователя
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Платёж успешно выполнен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Ошибка при выполнении платежа
+        '404':
+          description: Пользователь не найден

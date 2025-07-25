@@ -12,6 +12,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @AllArgsConstructor
 @Builder
 public class Item {
+
     @Id
     private Long id;
     private String title;
